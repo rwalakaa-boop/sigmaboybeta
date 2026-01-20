@@ -6631,7 +6631,7 @@ end)
 local TargetDot = Drawing.new("Circle")
 TargetDot.Filled = true
 TargetDot.Thickness = 1
-TargetDot.NumSides = 20
+TargetDot.NumSides = 12
 TargetDot.Radius = 7
 TargetDot.Visible = false
 TargetDot.Color = Color3.fromRGB(255, 0, 0)
@@ -6652,12 +6652,12 @@ local TargetAimTable = {
 	CharmsColor = Color3.fromRGB(255, 0, 255)
 }
 
-local function ClearCharms(player)
-	if player and player.Character then
-		local highlight = player.Character:FindFirstChild("TargetHighlight")
-		if highlight then
-			highlight:Destroy()
-		end
+local currentHighlight = nil
+
+local function ClearCharms()
+	if currentHighlight then
+		currentHighlight:Destroy()
+		currentHighlight = nil
 	end
 end
 
@@ -6671,7 +6671,7 @@ local TargetAimSubPage = CombatPage:SubPage({ Name = "Target Aim", Columns = 2 }
 				TargetAimTable.Enabled = v
 				if not v then 
 					TargetAimTable.Active = false
-					ClearCharms(_G.LockedTarget)
+					ClearCharms()
 					_G.LockedTarget = nil 
 				end
 			end
@@ -6685,7 +6685,7 @@ local TargetAimSubPage = CombatPage:SubPage({ Name = "Target Aim", Columns = 2 }
 			Callback = function(v)
 				TargetAimTable.Active = v
 				if not v then 
-					ClearCharms(_G.LockedTarget)
+					ClearCharms()
 					_G.LockedTarget = nil 
 				end
 			end
@@ -6745,7 +6745,7 @@ local TargetAimSubPage = CombatPage:SubPage({ Name = "Target Aim", Columns = 2 }
 			Flag = "TargetCharms",
 			Callback = function(v) 
 				TargetAimTable.Charms = v 
-				if not v then ClearCharms(_G.LockedTarget) end
+				if not v then ClearCharms() end
 			end
 		})
 
@@ -6785,29 +6785,28 @@ RunService.RenderStepped:Connect(function()
 	if TargetAimTable.Enabled and TargetAimTable.Active then
 		local OldTarget = _G.LockedTarget
 
-		if not _G.LockedTarget then
+		if not _G.LockedTarget or not IsAlive(_G.LockedTarget, "Target") then
 			local newTarget = GetTarget(getgenv().AimbotFOVRadius or 200, "Target")
 			if newTarget then
-				_G.LockedTarget = newTarget
-				if TargetAimTable.Notify then
-					Library:Notification("Target Locked", "Locked onto: " .. tostring(_G.LockedTarget.DisplayName or _G.LockedTarget.Name), 2)
+				if _G.LockedTarget ~= newTarget then
+					ClearCharms()
+					_G.LockedTarget = newTarget
+					if TargetAimTable.Notify then
+						Library:Notification("Target Locked", "Locked onto: " .. tostring(_G.LockedTarget.DisplayName or _G.LockedTarget.Name), 2)
+					end
 				end
+			else
+				_G.LockedTarget = nil
+				ClearCharms()
 			end
 		end
 
-		if _G.LockedTarget and IsAlive(_G.LockedTarget) then
-			if OldTarget and OldTarget ~= _G.LockedTarget then
-				ClearCharms(OldTarget)
-				if TargetAimTable.Notify then
-					Library:Notification("Target Switched", "New target: " .. tostring(_G.LockedTarget.DisplayName or _G.LockedTarget.Name), 2)
-				end
-			end
-
+		if _G.LockedTarget then
 			local targetChar = _G.LockedTarget.Character
 			local hitPart = targetChar:FindFirstChild(TargetAimTable.Part)
 
 			if hitPart then
-				local velocity = TargetAimTable.Resolver and GetResolvedVelocity(_G.LockedTarget, "Target") or _G.LockedTarget.Character.HumanoidRootPart.Velocity
+				local velocity = TargetAimTable.Resolver and GetResolvedVelocity(_G.LockedTarget, "Target") or targetChar.HumanoidRootPart.Velocity
 				local finalPos = hitPart.Position + (velocity * TargetAimTable.Prediction)
 
 				if TargetAimTable.LookAt then
@@ -6823,24 +6822,21 @@ RunService.RenderStepped:Connect(function()
 				end
 
 				if TargetAimTable.Charms then
-					local highlight = targetChar:FindFirstChild("TargetHighlight")
-					if not highlight then
-						highlight = Instance.new("Highlight")
-						highlight.Name = "TargetHighlight"
-						highlight.Parent = targetChar
+					if not currentHighlight or currentHighlight.Parent ~= targetChar then
+						ClearCharms()
+						currentHighlight = Instance.new("Highlight")
+						currentHighlight.Name = "TargetHighlight"
+						currentHighlight.Parent = targetChar
 					end
-					highlight.FillColor = TargetAimTable.CharmsColor
-					highlight.OutlineColor = TargetAimTable.CharmsColor
-					highlight.FillTransparency = 0.5
-					highlight.OutlineTransparency = 0
+					currentHighlight.FillColor = TargetAimTable.CharmsColor
+					currentHighlight.OutlineColor = TargetAimTable.CharmsColor
+					currentHighlight.FillTransparency = 0.5
+					currentHighlight.OutlineTransparency = 0
 				end
 			end
-		else
-			ClearCharms(_G.LockedTarget)
-			_G.LockedTarget = nil
 		end
 	else
-		ClearCharms(_G.LockedTarget)
+		ClearCharms()
 		_G.LockedTarget = nil
 	end
 end)
@@ -6854,7 +6850,7 @@ OldIndex = hookmetamethod(game, "__index", function(self, index)
 				local targetPart = char:FindFirstChild(TargetAimTable.Part)
 
 				if targetPart then
-					local velocity = TargetAimTable.Resolver and GetResolvedVelocity(_G.LockedTarget, "Target") or _G.LockedTarget.Character.HumanoidRootPart.Velocity
+					local velocity = TargetAimTable.Resolver and GetResolvedVelocity(_G.LockedTarget, "Target") or char.HumanoidRootPart.Velocity
 					local targetCF = targetPart.CFrame + (velocity * TargetAimTable.Prediction)
 					return (index == "Hit" and targetCF or targetPart)
 				end
