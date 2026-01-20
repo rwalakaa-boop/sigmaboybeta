@@ -6108,19 +6108,12 @@ local Library do
 						if ConfigSelected then
 							local Path = Library.Folders.Configs .. "/" .. ConfigSelected
 							if isfile(Path) then
-								local ConfigData = game:GetService("HttpService"):JSONDecode(readfile(Path))
-
-								for Flag, Value in pairs(ConfigData) do
-									if Library.Flags[Flag] ~= nil then
-
-										local Option = Library.Options[Flag]
-										if Option and Option.Set then
-											Option:Set(Value)
-										end
-									end
+								local Success, Result = Library:LoadConfig(readfile(Path))
+								if Success then
+									Library:Notification("Success", "Loaded config " .. ConfigSelected, 5)
+								else
+									Library:Notification("Error", "Failed to load config", 5)
 								end
-
-								Library:Notification("Success", "Loaded config " .. ConfigSelected, 5)
 							else
 								Library:Notification("Error", "File no longer exists", 5)
 								Library:RefreshConfigsList(ConfigsSearchbox)
