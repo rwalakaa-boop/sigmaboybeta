@@ -808,9 +808,14 @@ local Library do
 			for Index, Value in pairs(Library.Flags) do 
 				if type(Value) == "table" and Value.Key then
 					Config[Index] = {Key = tostring(Value.Key), Mode = Value.Mode}
-				elseif type(Value) == "table" and Value.Color then
-					Config[Index] = {Color = Value.Color:ToHex(), Alpha = Value.Alpha}
+				elseif typeof(Value) == "Color3" then
+
+					local AlphaVal = Library.Flags[Index .. "Alpha"] or 1
+					Config[Index] = {Color = Value:ToHex(), Alpha = AlphaVal}
+				elseif type(Value) == "table" and Value.Color and typeof(Value.Color) == "Color3" then
+					Config[Index] = {Color = Value.Color:ToHex(), Alpha = Value.Alpha or 1}
 				else
+
 					Config[Index] = Value
 				end
 			end
@@ -820,21 +825,32 @@ local Library do
 	end
 
 	Library.LoadConfig = function(self, Config)
+		if not Config or Config == "" then return false, "Empty Config" end
+
 		local Success, Decoded = pcall(HttpService.JSONDecode, HttpService, Config)
 		if not Success then return false, Decoded end
 
 		local CallSuccess, CallResult = Library:SafeCall(function()
 			for Index, Value in pairs(Decoded) do 
-				local SetFunction = Library.SetFlags[Index]
+				local SetFunction = Library.SetFlags and Library.SetFlags[Index]
 
 				if not SetFunction then
-					continue
+					local Option = Library.Options and Library.Options[Index]
+					if Option and Option.Set then
+						SetFunction = function(...) Option:Set(...) end
+					end
 				end
+
+				if not SetFunction then continue end
 
 				if type(Value) == "table" and Value.Key then 
 					SetFunction(Value)
 				elseif type(Value) == "table" and Value.Color then
-					SetFunction(Color3.fromHex(Value.Color), Value.Alpha)
+
+					local colorSuccess, colorObj = pcall(Color3.fromHex, Value.Color)
+					if colorSuccess then
+						SetFunction(colorObj, Value.Alpha or 1)
+					end
 				else
 					SetFunction(Value)
 				end
@@ -843,7 +859,7 @@ local Library do
 
 		return CallSuccess, CallResult
 	end
-
+	
 	Library.DeleteConfig = function(self, Config)
 		local Path = Library.Folders.Configs .. "/" .. Config
 		if isfile(Path) then 
@@ -6062,42 +6078,34 @@ local Library do
 						Flag = "ConfigsSearchbox",
 						Items = {},
 						Multi = false,
-						Callback = function(Value)
-							ConfigSelected = Value
-						end
+						Callback = function(Value) ConfigSelected = Value end
 					})
 
 					ConfigsSection:Textbox({
 						Name = "Config name", 
 						Default = "", 
 						Flag = "ConfigName", 
-						Placeholder = "Enter text", 
-						Callback = function(Value)
-							ConfigName = Value
-						end
+						Placeholder = "Enter text...", 
+						Callback = function(Value) ConfigName = Value end
 					})
 
 					local CreateAndDeleteButton = ConfigsSection:Button()
 
 					CreateAndDeleteButton:Add("Create", function()
-						if ConfigName and ConfigName ~= "" then
-							local FileName = ConfigName .. ".json"
-							local Path = Library.Folders.Configs .. "/" .. FileName
-							if not isfile(Path) then
-								writefile(Path, Library:GetConfig())
-								Library:Notification("Success", "Created config " .. ConfigName .. " successfully", 5)
-								Library:RefreshConfigsList(ConfigsSearchbox)
-							else
-								Library:Notification("Error", "Config already exists", 5)
-							end
+						if ConfigName ~= "" then
+							-- FIX: Ensure folder exists and path is a string
+							local Folder = tostring(Library.Folders.Configs)
+							local Path = Folder .. "/" .. tostring(ConfigName) .. ".json"
+							writefile(Path, Library:GetConfig())
+							Library:Notification("Success", "Created " .. ConfigName, 5)
+							Library:RefreshConfigsList(ConfigsSearchbox)
 						end
 					end)
 
 					CreateAndDeleteButton:Add("Delete", function()
 						if ConfigSelected then
-							Library:DeleteConfig(ConfigSelected)
-							Library:Notification("Success", "Deleted config " .. ConfigSelected, 5)
-							ConfigSelected = nil
+							Library:DeleteConfig(tostring(ConfigSelected))
+							Library:Notification("Success", "Deleted " .. tostring(ConfigSelected), 5)
 							Library:RefreshConfigsList(ConfigsSearchbox)
 						end
 					end)
@@ -6106,17 +6114,15 @@ local Library do
 
 					LoadAndSaveButton:Add("Load", function()
 						if ConfigSelected then
-							local Path = Library.Folders.Configs .. "/" .. ConfigSelected
+							local Folder = tostring(Library.Folders.Configs)
+							local Path = Folder .. "/" .. tostring(ConfigSelected)
 							if isfile(Path) then
-								local Success, Result = Library:LoadConfig(readfile(Path))
+								local Success, Error = Library:LoadConfig(readfile(Path))
 								if Success then
-									Library:Notification("Success", "Loaded config " .. ConfigSelected, 5)
+									Library:Notification("Success", "Loaded config!", 5)
 								else
-									Library:Notification("Error", "Failed to load config", 5)
+									warn("Load Error: " .. tostring(Error))
 								end
-							else
-								Library:Notification("Error", "File no longer exists", 5)
-								Library:RefreshConfigsList(ConfigsSearchbox)
 							end
 						end
 					end)
@@ -6124,12 +6130,11 @@ local Library do
 					LoadAndSaveButton:Add("Save", function()
 						local Target = (ConfigName ~= "" and ConfigName .. ".json") or ConfigSelected
 						if Target then
-							if not Target:find("%.json$") then Target = Target .. ".json" end
-							writefile(Library.Folders.Configs .. "/" .. Target, Library:GetConfig())
-							Library:Notification("Success", "Saved config " .. Target, 5)
+							local Folder = tostring(Library.Folders.Configs)
+							local Path = Folder .. "/" .. tostring(Target)
+							writefile(Path, Library:GetConfig())
+							Library:Notification("Success", "Saved " .. tostring(Target), 5)
 							Library:RefreshConfigsList(ConfigsSearchbox)
-						else
-							Library:Notification("Error", "Provide a name or select a config", 5)
 						end
 					end)
 
