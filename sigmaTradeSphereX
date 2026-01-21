@@ -7000,6 +7000,7 @@ local PlayersSubPage = PlayersPage:SubPage({ Name = "Main", Columns = 2 }) do
 	local DesyncSection = PlayersSubPage:Section({ Name = "Desync Network", Side = 1 })
 	local AntiLockSection = PlayersSubPage:Section({ Name = "Anti Locks", Side = 1 })
 	local AntiModSection = PlayersSubPage:Section({ Name = "Anti Mods", Side = 1 })
+	local PlayersSection = PlayersSubPage:Section({Name = "Player List", Side = 2}) do
 
 	local function isStaff(player)
 		return player:GetRankInGroup(693335996) > 0 or player.UserId < 0
@@ -7387,6 +7388,72 @@ local PlayersSubPage = PlayersPage:SubPage({ Name = "Main", Columns = 2 }) do
 			end
 		})
 	end
+end
+	local SelectedPlayer = nil
+
+	local PlayerSearch = PlayersSection:Searchbox({
+		Name = "Select Player",
+		Flag = "PlayerListSearch",
+		Items = {},
+		Multi = false,
+		Callback = function(v)
+			for _, plyr in ipairs(game.Players:GetPlayers()) do
+				if plyr.DisplayName == v or plyr.Name == v then
+					SelectedPlayer = plyr
+					break
+				end
+			end
+		end
+	})
+
+	local function RefreshPlayerList()
+		local pList = {}
+		for _, v in ipairs(game.Players:GetPlayers()) do
+			if v ~= LocalPlayer then
+				table.insert(pList, v.DisplayName or v.Name)
+			end
+		end
+		PlayerSearch:Refresh(pList)
+	end
+
+	local TeleportButtons = PlayersSection:Button()
+	TeleportButtons:Add("Teleport", function()
+		if SelectedPlayer and SelectedPlayer.Character and SelectedPlayer.Character:FindFirstChild("HumanoidRootPart") then
+			local lpChar = LocalPlayer.Character
+			local lpHrp = lpChar and lpChar:FindFirstChild("HumanoidRootPart")
+			if lpHrp then
+				lpHrp.CFrame = SelectedPlayer.Character.HumanoidRootPart.CFrame
+			end
+		end
+	end)
+
+	TeleportButtons:Add("Freeze TP", function()
+		if SelectedPlayer and SelectedPlayer.Character and SelectedPlayer.Character:FindFirstChild("HumanoidRootPart") then
+			local lpChar = LocalPlayer.Character
+			local lpHrp = lpChar and lpChar:FindFirstChild("HumanoidRootPart")
+			if lpHrp then
+				lpHrp.CFrame = SelectedPlayer.Character.HumanoidRootPart.CFrame
+				lpHrp.Anchored = true
+				task.wait(0.1)
+				lpHrp.Anchored = false
+			end
+		end
+	end)
+
+	local WatchButtons = PlayersSection:Button()
+	WatchButtons:Add("Watch", function()
+		if SelectedPlayer and SelectedPlayer.Character then
+			workspace.CurrentCamera.CameraSubject = SelectedPlayer.Character:FindFirstChildOfClass("Humanoid")
+		end
+	end)
+
+	WatchButtons:Add("Unwatch", function()
+		workspace.CurrentCamera.CameraSubject = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	end)
+
+	game.Players.PlayerAdded:Connect(RefreshPlayerList)
+	game.Players.PlayerRemoving:Connect(RefreshPlayerList)
+	RefreshPlayerList()
 end
 
 local ThemeColor = Color3.fromRGB(255, 255, 0)
